@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 from data.epfl import EPFLDataset
 from networks.unet import UNet2D, UNet3D
-from util.losses import JaccardLoss
+from util.losses import JaccardLoss, cross_entropy2d
 from util.preprocessing import get_augmenters_2d, get_augmenters_3d
 from util.validation import segment
 from util.metrics import jaccard, dice
@@ -45,11 +45,11 @@ parser.add_argument("--augment_noise", help="Use noise augmentation", type=int, 
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)
 parser.add_argument("--step_size", help="Number of epochs after which the learning rate should decay", type=int, default=10)
 parser.add_argument("--gamma", help="Learning rate decay factor", type=float, default=0.9)
-parser.add_argument("--epochs", help="Total number of epochs to train", type=int, default=200)
+parser.add_argument("--epochs", help="Total number of epochs to train", type=int, default=100)
 parser.add_argument("--test_freq", help="Number of epochs between each test stage", type=int, default=1)
-parser.add_argument("--train_batch_size", help="Batch size in the training stage", type=int, default=1)
+parser.add_argument("--train_batch_size", help="Batch size in the training stage", type=int, default=4)
 parser.add_argument("--test_batch_size", help="Batch size in the testing stage", type=int, default=1)
-loss_fn_seg = JaccardLoss()
+loss_fn_seg = cross_entropy2d
 
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
