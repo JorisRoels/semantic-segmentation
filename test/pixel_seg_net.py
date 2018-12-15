@@ -13,11 +13,11 @@ import os
 import argparse
 import datetime
 
-from data.epfl import EPFLDataset
-from util.validation import segment
+from util.validation import segment_pixels
 from util.tools import load_net
 from util.io import imwrite3D, read_tif
 from util.preprocessing import normalize
+from util.metrics import accuracy_metrics, jaccard, dice
 
 """
     Parse all the arguments
@@ -28,17 +28,18 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--method", help="Specifies 2D or 3D U-Net", type=str, default="2D")
 
 # logging parameters
-parser.add_argument("--write_dir", help="Writing directory", type=str, default="output")
+parser.add_argument("--write_dir", help="Writing directory", type=str, default=None)
 
 # network parameters
 parser.add_argument("--data", help="Path to the data (should be tif file)", type=str, default="data/testing.tif")
+parser.add_argument("--data_labels", help="Path to the data labels (should be tif file)", type=str, default="data/testing_groundtruth.tif")
 
 # network parameters
 parser.add_argument("--net", help="Path to the network", type=str, default="checkpoint.pytorch")
 
 # optimization parameters
-parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="512,512")
-parser.add_argument("--batch_size", help="Batch size", type=int, default=1)
+parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="95,95")
+parser.add_argument("--batch_size", help="Batch size", type=int, default=256)
 
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
@@ -47,8 +48,9 @@ args.input_size = [int(item) for item in args.input_size.split(',')]
     Setup writing directory
 """
 print('[%s] Setting up write directories' % (datetime.datetime.now()))
-if not os.path.exists(args.write_dir):
-    os.mkdir(args.write_dir)
+if args.write_dir is not None:
+    if not os.path.exists(args.write_dir):
+        os.mkdir(args.write_dir)
 
 """
     Load and normalize the data
@@ -71,12 +73,30 @@ net = load_net(args.net)
     Segmentation
 """
 print('[%s] Starting segmentation' % (datetime.datetime.now()))
-segmentation = segment(test_data, net, args.input_size, batch_size=args.batch_size)
+segmentation = segment_pixels(test_data, net, args.input_size, batch_size=args.batch_size)
+
+"""
+    Validate the segmentation
+"""
+print('[%s] Validating segmentation' % (datetime.datetime.now()))
+test_data_labels = read_tif(args.data_labels, dtype='uint8')
+test_data_labels = normalize(test_data_labels, 0, 255)
+j = jaccard(segmentation, test_data_labels)
+d = dice(segmentation, test_data_labels)
+a, p, r, f = accuracy_metrics(segmentation, test_data_labels)
+print('[%s] RESULTS:' % (datetime.datetime.now()))
+print('[%s]     Jaccard: %f' % (datetime.datetime.now(), j))
+print('[%s]     Dice: %f' % (datetime.datetime.now(), d))
+print('[%s]     Accuracy: %f' % (datetime.datetime.now(), a))
+print('[%s]     Precision: %f' % (datetime.datetime.now(), p))
+print('[%s]     Recall: %f' % (datetime.datetime.now(), r))
+print('[%s]     F-score: %f' % (datetime.datetime.now(), f))
 
 """
     Write out the results
 """
-print('[%s] Writing the output' % (datetime.datetime.now()))
-imwrite3D(segmentation, args.write_dir, rescale=True)
+if args.write_dir is not None:
+    print('[%s] Writing the output' % (datetime.datetime.now()))
+    imwrite3D(segmentation, args.write_dir, rescale=True)
 
 print('[%s] Finished!' % (datetime.datetime.now()))
