@@ -1,9 +1,9 @@
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import progressbar as pb
-from util.preprocessing import normalize
 from util.tools import gaussian_window
 
 # sliding window iterator
@@ -48,6 +48,9 @@ def segment(data, net, input_shape, batch_size=1, in_channels=1, step_size=None)
 
     # 2D or 3D
     is2d = len(input_shape) == 2
+
+    # upsampling might be necessary depending on the network
+    interp = nn.Upsample(size=input_shape, mode='bilinear', align_corners=True)
 
     # set step size to half of the window if necessary
     if step_size == None:
@@ -106,6 +109,8 @@ def segment(data, net, input_shape, batch_size=1, in_channels=1, step_size=None)
 
             # forward prop
             outputs = net(inputs)
+            if input_shape[0] != outputs.size(2) or input_shape[1] != outputs.size(3):
+                outputs = interp(outputs)
             outputs = F.softmax(outputs, dim=1)
 
             # cumulate segmentation volume
@@ -130,6 +135,8 @@ def segment(data, net, input_shape, batch_size=1, in_channels=1, step_size=None)
 
     # forward prop
     outputs = net(inputs)
+    if input_shape[0] != outputs.size(2) or input_shape[1] != outputs.size(3):
+        outputs = interp(outputs)
     outputs = F.softmax(outputs, dim=1)
 
     # cumulate segmentation volume
@@ -150,3 +157,58 @@ def segment(data, net, input_shape, batch_size=1, in_channels=1, step_size=None)
                              counts_cum[0:counts_cum.shape[0] - 2*z_pad, :, :])
 
     return segmentation
+
+# segment a data set with a given network with a sliding window
+# data is assumed a 3D volume
+def segment_pixels(data, net, input_shape, batch_size=1, in_channels=1):
+
+    # make sure we compute everything on the gpu and in evaluation mode
+    net.cuda()
+    net.eval()
+
+    # symmetric extension only necessary along z-axis if multichannel 2D inputs
+    padding = ((in_channels//2, in_channels//2),
+               (input_shape[0]//2, input_shape[0]//2),
+               (input_shape[1]//2, input_shape[1]//2))
+    data = np.pad(data, padding, mode='symmetric')
+
+    # allocate space
+    segmentation = np.zeros(data.shape)
+
+    # define sliding window
+    sw = sliding_window(data, step_size=(1,1,1), window_size=(in_channels, input_shape[0],input_shape[1]))
+
+    # start prediction
+    batch_counter = 0
+    batch = np.zeros((batch_size, in_channels, input_shape[0], input_shape[1]))
+    positions = np.zeros((batch_size, 3), dtype=int)
+    for (z, y, x, inputs) in sw:
+
+        # fill batch
+        batch[batch_counter, ...] = inputs
+        positions[batch_counter, :] = [z+in_channels//2, y+input_shape[0]//2, x+input_shape[1]//2]
+
+        # increment batch counter
+        batch_counter += 1
+
+        # perform segmentation when a full batch is filled
+        if batch_counter == batch_size:
+
+            # convert to tensors
+            inputs = torch.FloatTensor(batch).cuda()
+
+            # forward prop
+            outputs = net(inputs)
+            outputs = F.softmax(outputs, dim=1)
+
+            # cumulate segmentation volume
+            for b in range(batch_size):
+                (z_b, y_b, x_b) = positions[b, :]
+                segmentation[z_b, y_b, x_b] += outputs.data.cpu().numpy()[b, 1]
+
+            # reset batch counter
+            batch_counter = 0
+
+    return segmentation[in_channels//2:segmentation.shape[0]-in_channels//2,
+                        input_shape[0]//2:segmentation.shape[1]-input_shape[0]//2,
+                        input_shape[1]//2:segmentation.shape[2]-input_shape[1]//2]
