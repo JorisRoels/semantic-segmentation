@@ -71,7 +71,7 @@ if args.method == "2D":
 else:
     input_shape = args.input_size
 # load data
-print('[%s] Loading data (EPFL)' % (datetime.datetime.now()))
+print('[%s] Loading data' % (datetime.datetime.now()))
 if args.method == "2D":
     train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_2d(augment_noise=(args.augment_noise==1))
 else:

@@ -63,7 +63,7 @@ if not os.path.exists(args.log_dir):
 """
 input_shape = (1, args.input_size[0], args.input_size[1])
 # load data
-print('[%s] Loading data (EPFL)' % (datetime.datetime.now()))
+print('[%s] Loading data' % (datetime.datetime.now()))
 train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_2d(augment_noise=(args.augment_noise==1))
 if args.data == 'epfl':
     train = EPFLPixelDataset(input_shape=input_shape, train=True,
