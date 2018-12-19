@@ -7,10 +7,10 @@ from util.preprocessing import normalize
 from util.io import read_tif
 from util.tools import sample_labeled_input
 
-class EMBLDataset(data.Dataset):
+class EPFLDataset(data.Dataset):
 
     def __init__(self, input_shape, train=True,
-                 len_epoch=1000, transform=None, target_transform=None, split=0.5, mito=False):
+                 len_epoch=1000, transform=None, target_transform=None):
 
         self.train = train  # training set or test set
         self.input_shape = input_shape
@@ -18,18 +18,12 @@ class EMBLDataset(data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-        self.data = read_tif(os.path.join('../data', 'embl', 'data.tif'), dtype='uint8')
-        if mito:
-            self.labels = read_tif(os.path.join('../data', 'hela', 'mito_labels.tif'), dtype='int')
-        else:
-            self.labels = read_tif(os.path.join('../data', 'hela', 'er_labels.tif'), dtype='int')
-        s = int(split * self.data.shape[0])
         if self.train:
-            self.data = self.data[:s, :, :]
-            self.labels = self.labels[:s, :, :]
+            self.data = read_tif(os.path.join('../../data', 'epfl', 'training.tif'), dtype='uint8')
+            self.labels = read_tif(os.path.join('../../data', 'epfl', 'training_groundtruth.tif'), dtype='int')
         else:
-            self.data = self.data[s:, :, :]
-            self.labels = self.labels[s:, :, :]
+            self.data = read_tif(os.path.join('../../data', 'epfl', 'testing.tif'), dtype='uint8')
+            self.labels = read_tif(os.path.join('../../data', 'epfl', 'testing_groundtruth.tif'), dtype='int')
 
         # normalize data
         mu, std = self.get_stats()
@@ -65,10 +59,10 @@ class EMBLDataset(data.Dataset):
 
         return mu, std
 
-class EMBLPixelDataset(data.Dataset):
+class EPFLPixelDataset(data.Dataset):
 
     def __init__(self, input_shape, train=True,
-                 len_epoch=1000, transform=None, target_transform=None, split=0.5, mito=False):
+                 len_epoch=1000, transform=None, target_transform=None):
 
         self.train = train  # training set or test set
         self.input_shape = input_shape
@@ -76,18 +70,12 @@ class EMBLPixelDataset(data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-        self.data = read_tif(os.path.join('../data', 'embl', 'data.tif'), dtype='uint8')
-        if mito:
-            self.labels = read_tif(os.path.join('../data', 'hela', 'mito_labels.tif'), dtype='int')
-        else:
-            self.labels = read_tif(os.path.join('../data', 'hela', 'er_labels.tif'), dtype='int')
-        s = int(split * self.data.shape[0])
         if self.train:
-            self.data = self.data[:s, :, :]
-            self.labels = self.labels[:s, :, :]
+            self.data = read_tif(os.path.join('../../data', 'epfl', 'training.tif'), dtype='uint8')
+            self.labels = read_tif(os.path.join('../data', 'epfl', 'training_groundtruth.tif'), dtype='int')
         else:
-            self.data = self.data[s:, :, :]
-            self.labels = self.labels[s:, :, :]
+            self.data = read_tif(os.path.join('../../data', 'epfl', 'testing.tif'), dtype='uint8')
+            self.labels = read_tif(os.path.join('../../data', 'epfl', 'testing_groundtruth.tif'), dtype='int')
 
         # normalize data
         mu, std = self.get_stats()

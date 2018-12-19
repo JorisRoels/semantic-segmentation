@@ -15,7 +15,8 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from data.epfl import EPFLDataset
+from data.epfl.epfl import EPFLDataset
+from data.embl.embl import EMBLDataset
 from networks.unet import UNet2D, UNet3D
 from util.losses import JaccardLoss, cross_entropy2d
 from util.preprocessing import get_augmenters_2d, get_augmenters_3d
@@ -32,6 +33,7 @@ parser.add_argument("--method", help="Specifies 2D or 3D U-Net", type=str, defau
 
 # logging parameters
 parser.add_argument("--log_dir", help="Logging directory", type=str, default="logs")
+parser.add_argument("--data", help="Dataset for training", type=str, default="epfl") # options: 'epfl', 'embl_mito', 'embl_er'
 parser.add_argument("--print_stats", help="Number of iterations between each time to log training losses", type=int, default=100)
 
 # network parameters
@@ -74,10 +76,19 @@ if args.method == "2D":
     train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_2d(augment_noise=(args.augment_noise==1))
 else:
     train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_3d(augment_noise=(args.augment_noise==1))
-train = EPFLDataset(input_shape=input_shape, train=True,
-                    transform=train_xtransform, target_transform=train_ytransform)
-test = EPFLDataset(input_shape=input_shape, train=False,
-                   transform=test_xtransform, target_transform=test_ytransform)
+if args.data == 'epfl':
+    train = EPFLDataset(input_shape=input_shape, train=True,
+                        transform=train_xtransform, target_transform=train_ytransform)
+    test = EPFLDataset(input_shape=input_shape, train=False,
+                       transform=test_xtransform, target_transform=test_ytransform)
+else:
+    mito = False
+    if args.data == 'embl_mito':
+        mito = True
+    train = EMBLDataset(input_shape=input_shape, train=True,
+                        transform=train_xtransform, target_transform=train_ytransform, mito=mito)
+    test = EMBLDataset(input_shape=input_shape, train=False,
+                       transform=test_xtransform, target_transform=test_ytransform, mito=mito)
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.test_batch_size)
 
