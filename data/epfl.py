@@ -19,11 +19,11 @@ class EPFLDataset(data.Dataset):
         self.target_transform = target_transform
 
         if self.train:
-            self.data = read_tif(os.path.join('../data', 'training.tif'), dtype='uint8')
-            self.labels = read_tif(os.path.join('../data', 'training_groundtruth.tif'), dtype='int')
+            self.data = read_tif(os.path.join('../data', 'epfl', 'training.tif'), dtype='uint8')
+            self.labels = read_tif(os.path.join('../data', 'epfl', 'training_groundtruth.tif'), dtype='int')
         else:
-            self.data = read_tif(os.path.join('../data', 'testing.tif'), dtype='uint8')
-            self.labels = read_tif(os.path.join('../data', 'testing_groundtruth.tif'), dtype='int')
+            self.data = read_tif(os.path.join('../data', 'epfl', 'testing.tif'), dtype='uint8')
+            self.labels = read_tif(os.path.join('../data', 'epfl', 'testing_groundtruth.tif'), dtype='int')
 
         # normalize data
         mu, std = self.get_stats()
@@ -71,11 +71,11 @@ class EPFLPixelDataset(data.Dataset):
         self.target_transform = target_transform
 
         if self.train:
-            self.data = read_tif(os.path.join('../data', 'training.tif'), dtype='uint8')
-            self.labels = read_tif(os.path.join('../data', 'training_groundtruth.tif'), dtype='int')
+            self.data = read_tif(os.path.join('../data', 'epfl', 'training.tif'), dtype='uint8')
+            self.labels = read_tif(os.path.join('../data', 'epfl', 'training_groundtruth.tif'), dtype='int')
         else:
-            self.data = read_tif(os.path.join('../data', 'testing.tif'), dtype='uint8')
-            self.labels = read_tif(os.path.join('../data', 'testing_groundtruth.tif'), dtype='int')
+            self.data = read_tif(os.path.join('../data', 'epfl', 'testing.tif'), dtype='uint8')
+            self.labels = read_tif(os.path.join('../data', 'epfl', 'testing_groundtruth.tif'), dtype='int')
 
         # normalize data
         mu, std = self.get_stats()
