@@ -18,11 +18,11 @@ class EMBLDataset(data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-        self.data = read_tif(os.path.join('../../data', 'embl', 'data.tif'), dtype='uint8')
+        self.data = read_tif(os.path.join('../data', 'embl', 'data.tif'), dtype='uint8')
         if mito:
-            self.labels = read_tif(os.path.join('../../data', 'embl', 'mito_labels.tif'), dtype='int')
+            self.labels = read_tif(os.path.join('../data', 'embl', 'mito_labels.tif'), dtype='int')
         else:
-            self.labels = read_tif(os.path.join('../../data', 'embl', 'er_labels.tif'), dtype='int')
+            self.labels = read_tif(os.path.join('../data', 'embl', 'er_labels.tif'), dtype='int')
         s = int(split * self.data.shape[0])
         if self.train:
             self.data = self.data[:s, :, :]
@@ -76,11 +76,11 @@ class EMBLPixelDataset(data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-        self.data = read_tif(os.path.join('../../data', 'embl', 'data.tif'), dtype='uint8')
+        self.data = read_tif(os.path.join('../data', 'embl', 'data.tif'), dtype='uint8')
         if mito:
-            self.labels = read_tif(os.path.join('../../data', 'embl', 'mito_labels.tif'), dtype='int')
+            self.labels = read_tif(os.path.join('../data', 'embl', 'mito_labels.tif'), dtype='int')
         else:
-            self.labels = read_tif(os.path.join('../../data', 'embl', 'er_labels.tif'), dtype='int')
+            self.labels = read_tif(os.path.join('../data', 'embl', 'er_labels.tif'), dtype='int')
         s = int(split * self.data.shape[0])
         if self.train:
             self.data = self.data[:s, :, :]
