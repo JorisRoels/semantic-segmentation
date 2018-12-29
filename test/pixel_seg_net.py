@@ -30,7 +30,7 @@ parser.add_argument("--method", help="Specifies 2D or 3D U-Net", type=str, defau
 # logging parameters
 parser.add_argument("--write_dir", help="Writing directory", type=str, default=None)
 
-# network parameters
+# data parameters
 parser.add_argument("--data", help="Path to the data (should be tif file)", type=str, default="data/testing.tif")
 parser.add_argument("--data_labels", help="Path to the data labels (should be tif file)", type=str, default="data/testing_groundtruth.tif")
 
@@ -40,6 +40,7 @@ parser.add_argument("--net", help="Path to the network", type=str, default="chec
 # optimization parameters
 parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="95,95")
 parser.add_argument("--batch_size", help="Batch size", type=int, default=256)
+parser.add_argument("--crf_iterations", help="Number of CRF post-processing iterations (not applied if 0)", type=int, default=0)
 
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
@@ -73,7 +74,7 @@ net = load_net(args.net)
     Segmentation
 """
 print('[%s] Starting segmentation' % (datetime.datetime.now()))
-segmentation = segment_pixels(test_data, net, args.input_size, batch_size=args.batch_size)
+segmentation = segment_pixels(test_data, net, args.input_size, batch_size=args.batch_size, crf_iterations=args.crf_iterations, mu=mu, std=std)
 
 """
     Validate the segmentation
