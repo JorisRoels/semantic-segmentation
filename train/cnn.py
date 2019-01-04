@@ -16,8 +16,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from data.epfl.epfl import EPFLPixelDataset
-from data.embl.embl import EMBLPixelDataset
+from data.datasets import EPFLPixelTrainDataset, EPFLPixelTestDataset, EMBLERPixelTrainDataset, EMBLERPixelTestDataset, EMBLMitoPixelTrainDataset, EMBLMitoPixelTestDataset
 from networks.cnn import CNN
 from util.preprocessing import get_augmenters_2d
 from util.validation import segment_pixels
@@ -66,18 +65,15 @@ input_shape = (1, args.input_size[0], args.input_size[1])
 print('[%s] Loading data' % (datetime.datetime.now()))
 train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_2d(augment_noise=(args.augment_noise==1))
 if args.data == 'epfl':
-    train = EPFLPixelDataset(input_shape=input_shape, train=True,
-                             transform=train_xtransform, target_transform=train_ytransform)
-    test = EPFLPixelDataset(input_shape=input_shape, train=False,
-                            transform=test_xtransform, target_transform=test_ytransform)
+    train = EPFLPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
+    test = EPFLPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
 else:
-    mito = False
     if args.data == 'embl_mito':
-        mito = True
-    train = EMBLPixelDataset(input_shape=input_shape, train=True,
-                             transform=train_xtransform, target_transform=train_ytransform, mito=mito)
-    test = EMBLPixelDataset(input_shape=input_shape, train=False,
-                            transform=test_xtransform, target_transform=test_ytransform, mito=mito)
+        train = EMBLMitoPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
+        test = EMBLMitoPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    else:
+        train = EMBLERPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
+        test = EMBLERPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.test_batch_size)
 
