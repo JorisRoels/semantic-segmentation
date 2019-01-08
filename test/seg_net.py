@@ -40,7 +40,7 @@ parser.add_argument("--net", help="Path to the network", type=str, default="chec
 # optimization parameters
 parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="512,512")
 parser.add_argument("--batch_size", help="Batch size", type=int, default=1)
-parser.add_argument("--crf_iterations", help="Number of CRF post-processing iterations (not applied if 0)", type=int, default=5)
+parser.add_argument("--crf_iterations", help="Number of CRF post-processing iterations (not applied if 0)", type=int, default=0)
 
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
