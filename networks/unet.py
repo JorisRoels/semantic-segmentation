@@ -2,6 +2,7 @@
 import datetime
 import os
 import numpy as np
+import numpy.random as rnd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -496,6 +497,360 @@ class UNet3D(nn.Module):
                 writer.add_image('test/x', x, epoch)
                 writer.add_image('test/y', y, epoch)
                 writer.add_image('test/y_pred', y_pred, epoch)
+
+        return loss_avg
+
+    # trains the network
+    def train_net(self, train_loader, test_loader, loss_fn, optimizer, scheduler=None, epochs=100, test_freq=1, print_stats=1, log_dir=None, write_images_freq=1):
+
+        # log everything if necessary
+        if log_dir is not None:
+            writer = SummaryWriter(log_dir=log_dir)
+        else:
+            writer = None
+
+        test_loss_min = np.inf
+        for epoch in range(epochs):
+
+            print('[%s] Epoch %5d/%5d' % (datetime.datetime.now(), epoch, epochs))
+
+            # train the model for one epoch
+            self.train_epoch(loader=train_loader, loss_fn=loss_fn, optimizer=optimizer, epoch=epoch,
+                             print_stats=print_stats, writer=writer, write_images=epoch % write_images_freq == 0)
+
+            # adjust learning rate if necessary
+            if scheduler is not None:
+                scheduler.step(epoch=epoch)
+
+                # and keep track of the learning rate
+                writer.add_scalar('learning_rate', float(scheduler.get_lr()[0]), epoch)
+
+            # test the model for one epoch is necessary
+            if epoch % test_freq == 0:
+                test_loss = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer, write_images=True)
+
+                # and save model if lower test loss is found
+                if test_loss < test_loss_min:
+                    test_loss_min = test_loss
+                    torch.save(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
+
+            # save model every epoch
+            torch.save(self, os.path.join(log_dir, 'checkpoint.pytorch'))
+
+        writer.close()
+
+# 2D unet autoencoder model
+class Autoencoder2D(nn.Module):
+
+    def __init__(self, in_channels=1, out_channels=1, feature_maps=64, levels=4, group_norm=True, sigma_min=0.0, sigma_max=1.0):
+        super(Autoencoder2D, self).__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.feature_maps = feature_maps
+        self.levels = levels
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+
+        # contractive path
+        self.encoder = UNetEncoder2D(in_channels, feature_maps=feature_maps, levels=levels, group_norm=group_norm)
+        # expansive path
+        self.decoder = UNetDecoder2D(out_channels, feature_maps=feature_maps, levels=levels, skip_connections=False, group_norm=group_norm)
+
+    def forward(self, inputs):
+
+        # contractive path
+        encoder_outputs, final_output = self.encoder(inputs)
+
+        # expansive path
+        decoder_outputs, outputs = self.decoder(final_output, encoder_outputs)
+
+        return outputs
+
+    # trains the network for one epoch
+    def train_epoch(self, loader, loss_fn, optimizer, epoch, print_stats=1, writer=None, write_images=False):
+
+        # make sure network is on the gpu and in training mode
+        self.cuda()
+        self.train()
+
+        # keep track of the average loss during the epoch
+        loss_cum = 0.0
+        cnt = 0
+
+        # start epoch
+        for i, data in enumerate(loader):
+
+            # get the inputs
+            x = data[0].cuda()
+
+            # add noise to the input (denoising autoencoder)
+            sigma = rnd.uniform(self.sigma_min, self.sigma_max)
+            x_noise = x + sigma*torch.rand_like(x)
+
+            # zero the gradient buffers
+            self.zero_grad()
+
+            # forward prop
+            x_rec = self(x_noise)
+
+            # compute loss
+            loss = loss_fn(x_rec, x)
+            loss_cum += loss.data.cpu().numpy()
+            cnt += 1
+
+            # backward prop
+            loss.backward()
+
+            # apply one step in the optimization
+            optimizer.step()
+
+            # print statistics if necessary
+            if i % print_stats == 0:
+                print('[%s] Epoch %5d - Iteration %5d/%5d - Loss: %.6f'
+                      % (datetime.datetime.now(), epoch, i, len(loader.dataset), loss))
+
+        # don't forget to compute the average and print it
+        loss_avg = loss_cum / cnt
+        print('[%s] Epoch %5d - Average train loss: %.6f'
+              % (datetime.datetime.now(), epoch, loss_avg))
+
+        # log everything
+        if writer is not None:
+
+            # always log scalars
+            writer.add_scalar('train/loss', loss_avg, epoch)
+
+            if write_images:
+                # write images
+                x = vutils.make_grid(x, normalize=True, scale_each=True)
+                x_rec = vutils.make_grid(torch.sigmoid(x_rec).data)
+                writer.add_image('train/x', x, epoch)
+                writer.add_image('train/x_rec', x_rec, epoch)
+
+        return loss_avg
+
+    # tests the network over one epoch
+    def test_epoch(self, loader, loss_fn, epoch, writer=None, write_images=False):
+
+        # make sure network is on the gpu and in training mode
+        self.cuda()
+        self.eval()
+
+        # keep track of the average loss during the epoch
+        loss_cum = 0.0
+        cnt = 0
+
+        # test loss
+        for i, data in enumerate(loader):
+
+            # get the inputs
+            x = data[0].cuda()
+
+            # forward prop
+            x_rec = self(x)
+
+            # compute loss
+            loss = loss_fn(x_rec, x)
+            loss_cum += loss.data.cpu().numpy()
+            cnt += 1
+
+        # don't forget to compute the average and print it
+        loss_avg = loss_cum / cnt
+        print('[%s] Epoch %5d - Average test loss: %.6f'
+              % (datetime.datetime.now(), epoch, loss_avg))
+
+        # log everything
+        if writer is not None:
+
+            # always log scalars
+            writer.add_scalar('test/loss', loss_avg, epoch)
+
+            if write_images:
+                # write images
+                x = vutils.make_grid(x, normalize=True, scale_each=True)
+                x_rec = vutils.make_grid(torch.sigmoid(x_rec).data)
+                writer.add_image('test/x', x, epoch)
+                writer.add_image('test/x_rec', x_rec, epoch)
+
+        return loss_avg
+
+    # trains the network
+    def train_net(self, train_loader, test_loader, loss_fn, optimizer, scheduler=None, epochs=100, test_freq=1, print_stats=1, log_dir=None, write_images_freq=1):
+
+        # log everything if necessary
+        if log_dir is not None:
+            writer = SummaryWriter(log_dir=log_dir)
+        else:
+            writer = None
+
+        test_loss_min = np.inf
+        for epoch in range(epochs):
+
+            print('[%s] Epoch %5d/%5d' % (datetime.datetime.now(), epoch, epochs))
+
+            # train the model for one epoch
+            self.train_epoch(loader=train_loader, loss_fn=loss_fn, optimizer=optimizer, epoch=epoch,
+                             print_stats=print_stats, writer=writer, write_images=epoch % write_images_freq == 0)
+
+            # adjust learning rate if necessary
+            if scheduler is not None:
+                scheduler.step(epoch=epoch)
+
+                # and keep track of the learning rate
+                writer.add_scalar('learning_rate', float(scheduler.get_lr()[0]), epoch)
+
+            # test the model for one epoch is necessary
+            if epoch % test_freq == 0:
+                test_loss = self.test_epoch(loader=test_loader, loss_fn=loss_fn, epoch=epoch, writer=writer, write_images=True)
+
+                # and save model if lower test loss is found
+                if test_loss < test_loss_min:
+                    test_loss_min = test_loss
+                    torch.save(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
+
+            # save model every epoch
+            torch.save(self, os.path.join(log_dir, 'checkpoint.pytorch'))
+
+        writer.close()
+
+# 3D unet autoencoder model
+class Autoencoder3D(nn.Module):
+
+    def __init__(self, in_channels=1, out_channels=1, feature_maps=64, levels=4, group_norm=True, sigma_min=0.0, sigma_max=1.0):
+        super(Autoencoder3D, self).__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.feature_maps = feature_maps
+        self.levels = levels
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+
+        # contractive path
+        self.encoder = UNetEncoder3D(in_channels, feature_maps=feature_maps, levels=levels, group_norm=group_norm)
+        # expansive path
+        self.decoder = UNetDecoder3D(out_channels, feature_maps=feature_maps, levels=levels, skip_connections=False, group_norm=group_norm)
+
+    def forward(self, inputs):
+
+        # contractive path
+        encoder_outputs, final_output = self.encoder(inputs)
+
+        # expansive path
+        decoder_outputs, outputs = self.decoder(final_output, encoder_outputs)
+
+        return outputs
+
+    # trains the network for one epoch
+    def train_epoch(self, loader, loss_fn, optimizer, epoch, print_stats=1, writer=None, write_images=False):
+
+        # make sure network is on the gpu and in training mode
+        self.cuda()
+        self.train()
+
+        # keep track of the average loss during the epoch
+        loss_cum = 0.0
+        cnt = 0
+
+        # start epoch
+        for i, data in enumerate(loader):
+
+            # get the inputs
+            x = data[0].cuda()
+
+            # add noise to the input (denoising autoencoder)
+            sigma = rnd.uniform(self.sigma_min, self.sigma_max)
+            x_noise = x + sigma*torch.rand_like(x)
+
+            # zero the gradient buffers
+            self.zero_grad()
+
+            # forward prop
+            x_rec = self(x)
+
+            # compute loss
+            loss = loss_fn(x_rec, x)
+            loss_cum += loss.data.cpu().numpy()
+            cnt += 1
+
+            # backward prop
+            loss.backward()
+
+            # apply one step in the optimization
+            optimizer.step()
+
+            # print statistics if necessary
+            if i % print_stats == 0:
+                print('[%s] Epoch %5d - Iteration %5d/%5d - Loss: %.6f'
+                      % (datetime.datetime.now(), epoch, i, len(loader.dataset), loss))
+
+        # don't forget to compute the average and print it
+        loss_avg = loss_cum / cnt
+        print('[%s] Epoch %5d - Average train loss: %.6f'
+              % (datetime.datetime.now(), epoch, loss_avg))
+
+        # log everything
+        if writer is not None:
+
+            # always log scalars
+            writer.add_scalar('train/loss', loss_avg, epoch)
+
+            if write_images:
+                # write images
+                x = x[:,:,x.size(2)//2,...]
+                x_rec = x_rec[:,:,x_rec.size(2)//2,...]
+                x = vutils.make_grid(x, normalize=True, scale_each=True)
+                x_rec = vutils.make_grid(torch.sigmoid(x_rec).data, scale_each=True)
+                writer.add_image('train/x', x, epoch)
+                writer.add_image('train/x_rec', x_rec, epoch)
+
+        return loss_avg
+
+    # tests the network over one epoch
+    def test_epoch(self, loader, loss_fn, epoch, writer=None, write_images=False):
+
+        # make sure network is on the gpu and in training mode
+        self.cuda()
+        self.eval()
+
+        # keep track of the average loss during the epoch
+        loss_cum = 0.0
+        cnt = 0
+
+        # test loss
+        for i, data in enumerate(loader):
+
+            # get the inputs
+            x = data[0].cuda()
+
+            # forward prop
+            x_rec = self(x)
+
+            # compute loss
+            loss = loss_fn(x_rec, x)
+            loss_cum += loss.data.cpu().numpy()
+            cnt += 1
+
+        # don't forget to compute the average and print it
+        loss_avg = loss_cum / cnt
+        print('[%s] Epoch %5d - Average test loss: %.6f'
+              % (datetime.datetime.now(), epoch, loss_avg))
+
+        # log everything
+        if writer is not None:
+
+            # always log scalars
+            writer.add_scalar('test/loss', loss_avg, epoch)
+
+            if write_images:
+                # write images
+                x = x[:,:,x.size(2)//2,...]
+                x_rec = x_rec[:,:,x_rec.size(2)//2,...]
+                x = vutils.make_grid(x, normalize=True, scale_each=True)
+                x_rec = vutils.make_grid(torch.sigmoid(x_rec).data, scale_each=True)
+                writer.add_image('test/x', x, epoch)
+                writer.add_image('test/x_rec', x_rec, epoch)
 
         return loss_avg
 
