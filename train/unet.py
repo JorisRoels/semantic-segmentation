@@ -15,12 +15,13 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from data.datasets import EPFLTrainDataset, EPFLTestDataset, EMBLERTrainDataset, EMBLERTestDataset, EMBLMitoTrainDataset, EMBLMitoTestDataset
+from data.datasets import *
 from networks.unet import UNet2D, UNet3D
-from util.losses import JaccardLoss, cross_entropy
+from util.io import imwrite3D
+from util.losses import CrossEntropyLoss
 from util.preprocessing import get_augmenters_2d, get_augmenters_3d
 from util.validation import segment
-from util.metrics import jaccard, dice
+from util.metrics import jaccard, dice, accuracy_metrics
 
 """
     Parse all the arguments
@@ -32,7 +33,8 @@ parser.add_argument("--method", help="Specifies 2D or 3D U-Net", type=str, defau
 
 # logging parameters
 parser.add_argument("--log_dir", help="Logging directory", type=str, default="logs")
-parser.add_argument("--data", help="Dataset for training", type=str, default="epfl") # options: 'epfl', 'embl_mito', 'embl_er'
+parser.add_argument("--write_dir", help="Writing directory", type=str, default=None)
+parser.add_argument("--data", help="Dataset for training", type=str, default="embl_er") # options: 'epfl', 'embl_mito', 'embl_er', vnc, med
 parser.add_argument("--print_stats", help="Number of iterations between each time to log training losses", type=int, default=100)
 
 # network parameters
@@ -41,6 +43,7 @@ parser.add_argument("--fm", help="Number of initial feature maps in the segmenta
 parser.add_argument("--levels", help="Number of levels in the segmentation U-Net (i.e. number of pooling stages)", type=int, default=4)
 parser.add_argument("--group_norm", help="Use group normalization instead of batch normalization", type=int, default=0)
 parser.add_argument("--augment_noise", help="Use noise augmentation", type=int, default=1)
+parser.add_argument("--class_weight", help="Percentage of the reference class", type=float, default=(0.944))
 
 # optimization parameters
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)
@@ -50,10 +53,11 @@ parser.add_argument("--epochs", help="Total number of epochs to train", type=int
 parser.add_argument("--test_freq", help="Number of epochs between each test stage", type=int, default=1)
 parser.add_argument("--train_batch_size", help="Batch size in the training stage", type=int, default=4)
 parser.add_argument("--test_batch_size", help="Batch size in the testing stage", type=int, default=1)
-loss_fn_seg = cross_entropy
 
 args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
+weight = torch.FloatTensor([1-args.class_weight, args.class_weight]).cuda()
+loss_fn_seg = CrossEntropyLoss(weight=weight)
 
 """
     Setup logging directory
@@ -61,6 +65,11 @@ args.input_size = [int(item) for item in args.input_size.split(',')]
 print('[%s] Setting up log directories' % (datetime.datetime.now()))
 if not os.path.exists(args.log_dir):
     os.mkdir(args.log_dir)
+if args.write_dir is not None:
+    if not os.path.exists(args.write_dir):
+        os.mkdir(args.write_dir)
+    os.mkdir(os.path.join(args.write_dir, 'segmentation_last_checkpoint'))
+    os.mkdir(os.path.join(args.write_dir, 'segmentation_best_checkpoint'))
 
 """
     Load the data
@@ -78,6 +87,12 @@ else:
 if args.data == 'epfl':
     train = EPFLTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
     test = EPFLTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+elif args.data == 'vnc':
+    train = VNCTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
+    test = VNCTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+elif args.data == 'med':
+    train = MEDTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
+    test = MEDTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
 else:
     if args.data == 'embl_mito':
         train = EMBLMitoTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
@@ -119,11 +134,33 @@ test_labels = test.labels
 segmentation_last_checkpoint = segment(test_data, net, args.input_size, batch_size=args.test_batch_size)
 j = jaccard(segmentation_last_checkpoint, test_labels)
 d = dice(segmentation_last_checkpoint, test_labels)
-print('[%s] Network performance (last checkpoint): Jaccard=%f - Dice=%f' % (datetime.datetime.now(), j, d))
+a, p, r, f = accuracy_metrics(segmentation_last_checkpoint, test_labels)
+print('[%s] Results last checkpoint:' % (datetime.datetime.now()))
+print('[%s]     Jaccard: %f' % (datetime.datetime.now(), j))
+print('[%s]     Dice: %f' % (datetime.datetime.now(), d))
+print('[%s]     Accuracy: %f' % (datetime.datetime.now(), a))
+print('[%s]     Precision: %f' % (datetime.datetime.now(), p))
+print('[%s]     Recall: %f' % (datetime.datetime.now(), r))
+print('[%s]     F-score: %f' % (datetime.datetime.now(), f))
 net = torch.load(os.path.join(args.log_dir, 'best_checkpoint.pytorch'))
 segmentation_best_checkpoint = segment(test_data, net, args.input_size, batch_size=args.test_batch_size)
 j = jaccard(segmentation_best_checkpoint, test_labels)
 d = dice(segmentation_best_checkpoint, test_labels)
-print('[%s] Network performance (best checkpoint): Jaccard=%f - Dice=%f' % (datetime.datetime.now(), j, d))
+a, p, r, f = accuracy_metrics(segmentation_best_checkpoint, test_labels)
+print('[%s] Results best checkpoint:' % (datetime.datetime.now()))
+print('[%s]     Jaccard: %f' % (datetime.datetime.now(), j))
+print('[%s]     Dice: %f' % (datetime.datetime.now(), d))
+print('[%s]     Accuracy: %f' % (datetime.datetime.now(), a))
+print('[%s]     Precision: %f' % (datetime.datetime.now(), p))
+print('[%s]     Recall: %f' % (datetime.datetime.now(), r))
+print('[%s]     F-score: %f' % (datetime.datetime.now(), f))
+
+"""
+    Write out the results
+"""
+if args.write_dir is not None:
+    print('[%s] Writing the output' % (datetime.datetime.now()))
+    imwrite3D(segmentation_last_checkpoint, os.path.join(args.write_dir, 'segmentation_last_checkpoint'), rescale=True)
+    imwrite3D(segmentation_best_checkpoint, os.path.join(args.write_dir, 'segmentation_best_checkpoint'), rescale=True)
 
 print('[%s] Finished!' % (datetime.datetime.now()))
