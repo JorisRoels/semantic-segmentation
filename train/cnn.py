@@ -38,7 +38,7 @@ parser.add_argument("--print_stats", help="Number of iterations between each tim
 # network parameters
 parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="95,95")
 parser.add_argument("--augment_noise", help="Use noise augmentation", type=int, default=1)
-parser.add_argument("--class_weight", help="Percentage of the reference class", type=float, default=(0.944))
+parser.add_argument("--class_weight", help="Percentage of the reference class", type=float, default=(0.5))
 
 # optimization parameters
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)

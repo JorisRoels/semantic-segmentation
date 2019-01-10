@@ -43,7 +43,7 @@ parser.add_argument("--fm", help="Number of initial feature maps in the segmenta
 parser.add_argument("--levels", help="Number of levels in the segmentation U-Net (i.e. number of pooling stages)", type=int, default=4)
 parser.add_argument("--group_norm", help="Use group normalization instead of batch normalization", type=int, default=0)
 parser.add_argument("--augment_noise", help="Use noise augmentation", type=int, default=1)
-parser.add_argument("--class_weight", help="Percentage of the reference class", type=float, default=(0.944))
+parser.add_argument("--class_weight", help="Percentage of the reference class", type=float, default=(0.5))
 
 # optimization parameters
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)
