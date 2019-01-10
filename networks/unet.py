@@ -10,6 +10,7 @@ import torchvision.utils as vutils
 from tensorboardX import SummaryWriter
 
 from networks.blocks import UNetConvBlock2D, UNetUpSamplingBlock2D, UNetConvBlock3D, UNetUpSamplingBlock3D
+from util.metrics import jaccard, accuracy_metrics
 
 # original 2D unet encoder
 class UNetEncoder2D(nn.Module):
@@ -281,8 +282,13 @@ class UNet2D(nn.Module):
         self.cuda()
         self.eval()
 
-        # keep track of the average loss during the epoch
+        # keep track of the average loss and metrics during the epoch
         loss_cum = 0.0
+        j_cum = 0.0
+        a_cum = 0.0
+        p_cum = 0.0
+        r_cum = 0.0
+        f_cum = 0.0
         cnt = 0
 
         # test loss
@@ -299,8 +305,19 @@ class UNet2D(nn.Module):
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
+            # compute other interesting metrics
+            y_ = F.softmax(y_pred, dim=1).data.cpu().numpy()[:,1,...]
+            j_cum += jaccard(y_, y.cpu().numpy())
+            a, p, r, f = accuracy_metrics(y_, y.cpu().numpy())
+            a_cum += a; p_cum += p; r_cum += r; f_cum += f
+
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
+        j_avg = j_cum / cnt
+        a_avg = a_cum / cnt
+        p_avg = p_cum / cnt
+        r_avg = r_cum / cnt
+        f_avg = f_cum / cnt
         print('[%s] Epoch %5d - Average test loss: %.6f'
               % (datetime.datetime.now(), epoch, loss_avg))
 
@@ -309,6 +326,11 @@ class UNet2D(nn.Module):
 
             # always log scalars
             writer.add_scalar('test/loss', loss_avg, epoch)
+            writer.add_scalar('test/jaccard', j_avg, epoch)
+            writer.add_scalar('test/accuracy', a_avg, epoch)
+            writer.add_scalar('test/precision', p_avg, epoch)
+            writer.add_scalar('test/recall', r_avg, epoch)
+            writer.add_scalar('test/f-score', f_avg, epoch)
 
             if write_images:
                 # write images
@@ -457,8 +479,13 @@ class UNet3D(nn.Module):
         self.cuda()
         self.eval()
 
-        # keep track of the average loss during the epoch
+        # keep track of the average loss and metrics during the epoch
         loss_cum = 0.0
+        j_cum = 0.0
+        a_cum = 0.0
+        p_cum = 0.0
+        r_cum = 0.0
+        f_cum = 0.0
         cnt = 0
 
         # test loss
@@ -475,8 +502,19 @@ class UNet3D(nn.Module):
             loss_cum += loss.data.cpu().numpy()
             cnt += 1
 
+            # compute other interesting metrics
+            y_ = F.softmax(y_pred, dim=1).data.cpu().numpy()[:,1,...]
+            j_cum += jaccard(y_, y.cpu().numpy())
+            a, p, r, f = accuracy_metrics(y_, y.cpu().numpy())
+            a_cum += a; p_cum += p; r_cum += r; f_cum += f
+
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
+        j_avg = j_cum / cnt
+        a_avg = a_cum / cnt
+        p_avg = p_cum / cnt
+        r_avg = r_cum / cnt
+        f_avg = f_cum / cnt
         print('[%s] Epoch %5d - Average test loss: %.6f'
               % (datetime.datetime.now(), epoch, loss_avg))
 
@@ -485,6 +523,11 @@ class UNet3D(nn.Module):
 
             # always log scalars
             writer.add_scalar('test/loss', loss_avg, epoch)
+            writer.add_scalar('test/jaccard', j_avg, epoch)
+            writer.add_scalar('test/accuracy', a_avg, epoch)
+            writer.add_scalar('test/precision', p_avg, epoch)
+            writer.add_scalar('test/recall', r_avg, epoch)
+            writer.add_scalar('test/f-score', f_avg, epoch)
 
             if write_images:
                 # write images
