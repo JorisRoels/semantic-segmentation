@@ -59,7 +59,7 @@ class LabeledVolumeDataset(data.Dataset):
 
 class UnlabeledVolumeDataset(data.Dataset):
 
-    def __init__(self, data_path, input_shape, len_epoch=1000, preprocess='z', transform=None, dtype='uint8'):
+    def __init__(self, data_path, input_shape, len_epoch=1000, preprocess='unit', transform=None, dtype='uint8'):
 
         self.data_path = data_path
         self.input_shape = input_shape
@@ -123,6 +123,30 @@ class EPFLTestDataset(LabeledVolumeDataset):
                                               preprocess=preprocess,
                                               transform=transform,
                                               target_transform=target_transform)
+
+class EPFLTrainDatasetUnsupervised(UnlabeledVolumeDataset):
+
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
+        super(EPFLTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'epfl', 'volumedata.tif'),
+                                               input_shape,
+                                               len_epoch=len_epoch,
+                                               preprocess=preprocess,
+                                               transform=transform)
+
+        s = int(split * self.data.shape[0])
+        self.data = self.data[:s, :, :]
+
+class EPFLTestDatasetUnsupervised(UnlabeledVolumeDataset):
+
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
+        super(EPFLTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'epfl', 'volumedata.tif'),
+                                               input_shape,
+                                               len_epoch=len_epoch,
+                                               preprocess=preprocess,
+                                               transform=transform)
+
+        s = int(split * self.data.shape[0])
+        self.data = self.data[s:, :, :]
 
 class EPFLPixelTrainDataset(LabeledVolumeDataset):
 
@@ -368,6 +392,30 @@ class EMBLERPixelTestDataset(LabeledVolumeDataset):
         else:
             return input, target
 
+class EMBLTrainDatasetUnsupervised(UnlabeledVolumeDataset):
+
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
+        super(EMBLTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'embl', 'data_larger.tif'),
+                                               input_shape,
+                                               len_epoch=len_epoch,
+                                               preprocess=preprocess,
+                                               transform=transform)
+
+        s = int(split * self.data.shape[0])
+        self.data = self.data[:s, :, :]
+
+class EMBLTestDatasetUnsupervised(UnlabeledVolumeDataset):
+
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
+        super(EMBLTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'embl', 'data_larger.tif'),
+                                               input_shape,
+                                               len_epoch=len_epoch,
+                                               preprocess=preprocess,
+                                               transform=transform)
+
+        s = int(split * self.data.shape[0])
+        self.data = self.data[s:, :, :]
+
 class VNCTrainDataset(LabeledVolumeDataset):
 
     def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
@@ -462,6 +510,30 @@ class VNCPixelTestDataset(LabeledVolumeDataset):
         else:
             return input, target
 
+class VNCTrainDatasetUnsupervised(UnlabeledVolumeDataset):
+
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
+        super(VNCTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'vnc', 'data_larger.tif'),
+                                               input_shape,
+                                               len_epoch=len_epoch,
+                                               preprocess=preprocess,
+                                               transform=transform)
+
+        s = int(split * self.data.shape[0])
+        self.data = self.data[:s, :, :]
+
+class VNCTestDatasetUnsupervised(UnlabeledVolumeDataset):
+
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
+        super(VNCTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'vnc', 'data_larger.tif'),
+                                               input_shape,
+                                               len_epoch=len_epoch,
+                                               preprocess=preprocess,
+                                               transform=transform)
+
+        s = int(split * self.data.shape[0])
+        self.data = self.data[s:, :, :]
+
 class MEDTrainDataset(LabeledVolumeDataset):
 
     def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
@@ -555,3 +627,27 @@ class MEDPixelTestDataset(LabeledVolumeDataset):
             return input[np.newaxis, ...], target
         else:
             return input, target
+
+class MEDTrainDatasetUnsupervised(UnlabeledVolumeDataset):
+
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
+        super(MEDTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'med', 'data.tif'),
+                                               input_shape,
+                                               len_epoch=len_epoch,
+                                               preprocess=preprocess,
+                                               transform=transform)
+
+        s = int(split * self.data.shape[0])
+        self.data = self.data[:s, :, :]
+
+class MEDTestDatasetUnsupervised(UnlabeledVolumeDataset):
+
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
+        super(MEDTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'med', 'data.tif'),
+                                               input_shape,
+                                               len_epoch=len_epoch,
+                                               preprocess=preprocess,
+                                               transform=transform)
+
+        s = int(split * self.data.shape[0])
+        self.data = self.data[s:, :, :]
