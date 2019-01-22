@@ -126,27 +126,21 @@ class EPFLTestDataset(LabeledVolumeDataset):
 
 class EPFLTrainDatasetUnsupervised(UnlabeledVolumeDataset):
 
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
-        super(EPFLTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'epfl', 'volumedata.tif'),
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None):
+        super(EPFLTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'epfl', 'volumedata_train.tif'),
                                                input_shape,
                                                len_epoch=len_epoch,
                                                preprocess=preprocess,
                                                transform=transform)
-
-        s = int(split * self.data.shape[0])
-        self.data = self.data[:s, :, :]
 
 class EPFLTestDatasetUnsupervised(UnlabeledVolumeDataset):
 
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
-        super(EPFLTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'epfl', 'volumedata.tif'),
+    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None):
+        super(EPFLTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'epfl', 'volumedata_test.tif'),
                                                input_shape,
                                                len_epoch=len_epoch,
                                                preprocess=preprocess,
                                                transform=transform)
-
-        s = int(split * self.data.shape[0])
-        self.data = self.data[s:, :, :]
 
 class EPFLPixelTrainDataset(LabeledVolumeDataset):
 

@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 from data.datasets import *
 from networks.unet import UNet2D, UNet3D
 from util.io import imwrite3D
-from util.losses import CrossEntropyLoss
+from util.losses import CrossEntropyLoss, MSELoss
 from util.preprocessing import get_augmenters_2d, get_augmenters_3d
 from util.validation import segment
 from util.metrics import jaccard, dice, accuracy_metrics
@@ -34,11 +34,11 @@ parser.add_argument("--method", help="Specifies 2D or 3D U-Net", type=str, defau
 # logging parameters
 parser.add_argument("--log_dir", help="Logging directory", type=str, default="logs")
 parser.add_argument("--write_dir", help="Writing directory", type=str, default=None)
-parser.add_argument("--data", help="Dataset for training", type=str, default="embl_er") # options: 'epfl', 'embl_mito', 'embl_er', vnc, med
+parser.add_argument("--data", help="Dataset for training", type=str, default="epfl") # options: 'epfl', 'embl_mito', 'embl_er', vnc, med
 parser.add_argument("--print_stats", help="Number of iterations between each time to log training losses", type=int, default=100)
 
 # network parameters
-parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="512,512")
+parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="512")
 parser.add_argument("--fm", help="Number of initial feature maps in the segmentation U-Net", type=int, default=64)
 parser.add_argument("--levels", help="Number of levels in the segmentation U-Net (i.e. number of pooling stages)", type=int, default=4)
 parser.add_argument("--group_norm", help="Use group normalization instead of batch normalization", type=int, default=0)
@@ -46,6 +46,7 @@ parser.add_argument("--augment_noise", help="Use noise augmentation", type=int, 
 parser.add_argument("--class_weight", help="Percentage of the reference class", type=float, default=(0.5))
 
 # optimization parameters
+parser.add_argument("--pretrain_unsupervised", help="Flag whether to pre-train unsupervised", type=int, default=0)
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)
 parser.add_argument("--step_size", help="Number of epochs after which the learning rate should decay", type=int, default=10)
 parser.add_argument("--gamma", help="Learning rate decay factor", type=float, default=0.9)
@@ -58,6 +59,7 @@ args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
 weight = torch.FloatTensor([1-args.class_weight, args.class_weight]).cuda()
 loss_fn_seg = CrossEntropyLoss(weight=weight)
+loss_fn_rec = MSELoss()
 
 """
     Setup logging directory
@@ -87,12 +89,21 @@ else:
 if args.data == 'epfl':
     train = EPFLTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
     test = EPFLTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    if args.pretrain_unsupervised:
+        train_unsupervised = EPFLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
+        test_unsupervised = EPFLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
 elif args.data == 'vnc':
     train = VNCTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
     test = VNCTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    if args.pretrain_unsupervised:
+        train_unsupervised = VNCTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
+        test_unsupervised = VNCTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
 elif args.data == 'med':
     train = MEDTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
     test = MEDTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    if args.pretrain_unsupervised:
+        train_unsupervised = MEDTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
+        test_unsupervised = MEDTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
 else:
     if args.data == 'embl_mito':
         train = EMBLMitoTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
@@ -100,9 +111,16 @@ else:
     else:
         train = EMBLERTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
         test = EMBLERTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    if args.pretrain_unsupervised:
+        train_unsupervised = EMBLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
+        test_unsupervised = EMBLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.test_batch_size)
-
+train_loader_unsupervised = None
+test_loader_unsupervised = None
+if args.pretrain_unsupervised:
+    train_loader_unsupervised = DataLoader(train_unsupervised, batch_size=args.train_batch_size)
+    test_loader_unsupervised = DataLoader(test_unsupervised, batch_size=args.test_batch_size)
 
 """
     Setup optimization for finetuning
@@ -110,9 +128,9 @@ test_loader = DataLoader(test, batch_size=args.test_batch_size)
 print('[%s] Setting up optimization for finetuning' % (datetime.datetime.now()))
 # load best checkpoint
 if args.method == "2D":
-    net = UNet2D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1))
+    net = UNet2D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1), pretrain_unsupervised=(args.pretrain_unsupervised==1))
 else:
-    net = UNet3D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1))
+    net = UNet3D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1), pretrain_unsupervised=(args.pretrain_unsupervised==1))
 optimizer = optim.Adam(net.parameters(), lr=args.lr)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
 
@@ -121,9 +139,10 @@ scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma
 """
 print('[%s] Training network' % (datetime.datetime.now()))
 net.train_net(train_loader=train_loader, test_loader=test_loader,
-              loss_fn=loss_fn_seg, optimizer=optimizer, scheduler=scheduler,
+              loss_fn_seg=loss_fn_seg, optimizer=optimizer, scheduler=scheduler,
               epochs=args.epochs, test_freq=args.test_freq, print_stats=args.print_stats,
-              log_dir=args.log_dir)
+              log_dir=args.log_dir, loss_fn_rec=loss_fn_rec,
+              train_loader_unsupervised=train_loader_unsupervised, test_loader_unsupervised=test_loader_unsupervised)
 
 """
     Validate the trained network
