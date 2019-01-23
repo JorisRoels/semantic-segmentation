@@ -86,31 +86,35 @@ if args.method == "2D":
     train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_2d(augment_noise=(args.augment_noise==1))
 else:
     train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_3d(augment_noise=(args.augment_noise==1))
+if args.pretrain_unsupervised==1:
+    preprocess = 'unit'
+else:
+    preprocess = 'z'
 if args.data == 'epfl':
-    train = EPFLTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-    test = EPFLTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    train = EPFLTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=preprocess)
+    test = EPFLTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=preprocess)
     if args.pretrain_unsupervised:
         train_unsupervised = EPFLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
         test_unsupervised = EPFLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
 elif args.data == 'vnc':
-    train = VNCTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-    test = VNCTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    train = VNCTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=preprocess)
+    test = VNCTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=preprocess)
     if args.pretrain_unsupervised:
         train_unsupervised = VNCTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
         test_unsupervised = VNCTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
 elif args.data == 'med':
-    train = MEDTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-    test = MEDTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    train = MEDTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=preprocess)
+    test = MEDTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=preprocess)
     if args.pretrain_unsupervised:
         train_unsupervised = MEDTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
         test_unsupervised = MEDTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
 else:
     if args.data == 'embl_mito':
-        train = EMBLMitoTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-        test = EMBLMitoTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+        train = EMBLMitoTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=preprocess)
+        test = EMBLMitoTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=preprocess)
     else:
-        train = EMBLERTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-        test = EMBLERTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+        train = EMBLERTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=preprocess)
+        test = EMBLERTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=preprocess)
     if args.pretrain_unsupervised:
         train_unsupervised = EMBLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
         test_unsupervised = EMBLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
