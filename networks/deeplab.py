@@ -354,35 +354,35 @@ class DeepLab(nn.Module):
                 # save model every epoch
                 torch.save(self, os.path.join(log_dir, 'checkpoint.pytorch_rec'))
 
-            print('[%s] Starting supervised pre-training' % (datetime.datetime.now()))
-            self.phase = SUPERVISED_TRAINING
+        print('[%s] Starting supervised pre-training' % (datetime.datetime.now()))
+        self.phase = SUPERVISED_TRAINING
 
-            test_loss_min = np.inf
-            for epoch in range(epochs):
+        test_loss_min = np.inf
+        for epoch in range(epochs):
 
-                print('[%s] Epoch %5d/%5d' % (datetime.datetime.now(), epoch, epochs))
+            print('[%s] Epoch %5d/%5d' % (datetime.datetime.now(), epoch, epochs))
 
-                # train the model for one epoch
-                self.train_epoch(loader=train_loader, loss_fn=loss_fn_seg, optimizer=optimizer, epoch=epoch,
-                                 print_stats=print_stats, writer=writer, write_images=epoch % write_images_freq == 0)
+            # train the model for one epoch
+            self.train_epoch(loader=train_loader, loss_fn=loss_fn_seg, optimizer=optimizer, epoch=epoch,
+                             print_stats=print_stats, writer=writer, write_images=epoch % write_images_freq == 0)
 
-                # adjust learning rate if necessary
-                if scheduler is not None:
-                    scheduler.step(epoch=epoch)
+            # adjust learning rate if necessary
+            if scheduler is not None:
+                scheduler.step(epoch=epoch)
 
-                    # and keep track of the learning rate
-                    writer.add_scalar('learning_rate', float(scheduler.get_lr()[0]), epoch)
+                # and keep track of the learning rate
+                writer.add_scalar('learning_rate', float(scheduler.get_lr()[0]), epoch)
 
-                # test the model for one epoch is necessary
-                if epoch % test_freq == 0:
-                    test_loss = self.test_epoch(loader=test_loader, loss_fn=loss_fn_seg, epoch=epoch, writer=writer, write_images=True)
+            # test the model for one epoch is necessary
+            if epoch % test_freq == 0:
+                test_loss = self.test_epoch(loader=test_loader, loss_fn=loss_fn_seg, epoch=epoch, writer=writer, write_images=True)
 
-                    # and save model if lower test loss is found
-                    if test_loss < test_loss_min:
-                        test_loss_min = test_loss
-                        torch.save(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
+                # and save model if lower test loss is found
+                if test_loss < test_loss_min:
+                    test_loss_min = test_loss
+                    torch.save(self, os.path.join(log_dir, 'best_checkpoint.pytorch'))
 
-                # save model every epoch
-                torch.save(self, os.path.join(log_dir, 'checkpoint.pytorch'))
+            # save model every epoch
+            torch.save(self, os.path.join(log_dir, 'checkpoint.pytorch'))
 
-            writer.close()
+        writer.close()
