@@ -443,6 +443,11 @@ class UNet2D(nn.Module):
                 # save model every epoch
                 torch.save(self, os.path.join(log_dir, 'checkpoint.pytorch_rec'))
 
+            # only keep the encoder part, so reset the decoder
+            self.decoder = UNetDecoder2D(self.in_channels, self.out_channels, feature_maps=self.feature_maps, levels=self.levels,
+                                     skip_connections=True, group_norm=self.group_norm,
+                                     pretrain_unsupervised=self.pretrain_unsupervised)
+
         print('[%s] Starting supervised pre-training' % (datetime.datetime.now()))
         self.decoder.phase = SUPERVISED_TRAINING
 
