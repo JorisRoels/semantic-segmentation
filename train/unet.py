@@ -12,7 +12,6 @@ import argparse
 import datetime
 import os
 import torch
-import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from data.datasets import *
@@ -38,7 +37,7 @@ parser.add_argument("--data", help="Dataset for training", type=str, default="ep
 parser.add_argument("--print_stats", help="Number of iterations between each time to log training losses", type=int, default=100)
 
 # network parameters
-parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="512")
+parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="512,512")
 parser.add_argument("--fm", help="Number of initial feature maps in the segmentation U-Net", type=int, default=64)
 parser.add_argument("--levels", help="Number of levels in the segmentation U-Net (i.e. number of pooling stages)", type=int, default=4)
 parser.add_argument("--group_norm", help="Use group normalization instead of batch normalization", type=int, default=0)
@@ -132,15 +131,13 @@ if args.method == "2D":
     net = UNet2D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1), pretrain_unsupervised=(args.pretrain_unsupervised==1))
 else:
     net = UNet3D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1), pretrain_unsupervised=(args.pretrain_unsupervised==1))
-optimizer = optim.Adam(net.parameters(), lr=args.lr)
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
 
 """
     Train the network
 """
 print('[%s] Training network' % (datetime.datetime.now()))
 net.train_net(train_loader=train_loader, test_loader=test_loader,
-              loss_fn_seg=loss_fn_seg, optimizer=optimizer, scheduler=scheduler,
+              loss_fn_seg=loss_fn_seg, lr=args.lr, step_size=args.step_size, gamma=args.gamma,
               epochs=args.epochs, test_freq=args.test_freq, print_stats=args.print_stats,
               log_dir=args.log_dir, loss_fn_rec=loss_fn_rec,
               train_loader_unsupervised=train_loader_unsupervised, test_loader_unsupervised=test_loader_unsupervised)

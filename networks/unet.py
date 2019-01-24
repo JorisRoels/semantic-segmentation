@@ -6,6 +6,7 @@ import numpy.random as rnd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 import torchvision.utils as vutils
 from tensorboardX import SummaryWriter
 
@@ -404,7 +405,7 @@ class UNet2D(nn.Module):
         return loss_avg
 
     # trains the network
-    def train_net(self, train_loader, test_loader, loss_fn_seg, optimizer, scheduler=None, epochs=100, test_freq=1, print_stats=1, log_dir=None, write_images_freq=1,
+    def train_net(self, train_loader, test_loader, loss_fn_seg, lr=1e-3, step_size=1, gamma=1, epochs=100, test_freq=1, print_stats=1, log_dir=None, write_images_freq=1,
                   train_loader_unsupervised=None, test_loader_unsupervised=None, loss_fn_rec=None):
 
         # log everything if necessary
@@ -416,6 +417,9 @@ class UNet2D(nn.Module):
         if self.decoder.pretrain_unsupervised:
 
             print('[%s] Starting unsupervised pre-training' % (datetime.datetime.now()))
+
+            optimizer = optim.Adam(self.parameters(), lr=lr)
+            scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
 
             test_loss_min = np.inf
             for epoch in range(epochs):
@@ -452,6 +456,9 @@ class UNet2D(nn.Module):
 
         print('[%s] Starting supervised pre-training' % (datetime.datetime.now()))
         self.decoder.phase = SUPERVISED_TRAINING
+
+        optimizer = optim.Adam(self.parameters(), lr=lr)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
 
         test_loss_min = np.inf
         for epoch in range(epochs):
