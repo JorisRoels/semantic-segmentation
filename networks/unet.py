@@ -227,6 +227,8 @@ class UNet2D(nn.Module):
         self.out_channels = out_channels
         self.feature_maps = feature_maps
         self.levels = levels
+        self.group_norm = group_norm
+        self.pretrain_unsupervised = pretrain_unsupervised
 
         # contractive path
         self.encoder = UNetEncoder2D(in_channels, feature_maps=feature_maps, levels=levels, group_norm=group_norm)
