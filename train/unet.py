@@ -13,10 +13,11 @@ import datetime
 import os
 import torch
 from torch.utils.data import DataLoader
+from copy import deepcopy
 
 from data.datasets import *
 from networks.unet import UNet2D, UNet3D
-from util.io import imwrite3D
+from util.io import imwrite3D, load_net
 from util.losses import CrossEntropyLoss, MSELoss
 from util.preprocessing import get_augmenters_2d, get_augmenters_3d
 from util.validation import segment
@@ -83,27 +84,29 @@ else:
 # load data
 print('[%s] Loading data' % (datetime.datetime.now()))
 if args.method == "2D":
+    train_xtransform_us, train_ytransform_us, test_xtransform_us, test_ytransform_us = get_augmenters_2d(augment_noise=(args.augment_noise==1))
     train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_2d(augment_noise=(args.augment_noise==1))
 else:
+    train_xtransform_us, train_ytransform_us, test_xtransform_us, test_ytransform_us = get_augmenters_3d(augment_noise=(args.augment_noise==1))
     train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_3d(augment_noise=(args.augment_noise==1))
 if args.data == 'epfl':
     train = EPFLTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
     test = EPFLTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
     if args.pretrain_unsupervised:
-        train_unsupervised = EPFLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
-        test_unsupervised = EPFLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
+        train_unsupervised = EPFLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
+        test_unsupervised = EPFLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
 elif args.data == 'vnc':
     train = VNCTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
     test = VNCTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
     if args.pretrain_unsupervised:
-        train_unsupervised = VNCTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
-        test_unsupervised = VNCTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
+        train_unsupervised = VNCTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
+        test_unsupervised = VNCTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
 elif args.data == 'med':
     train = MEDTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
     test = MEDTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
     if args.pretrain_unsupervised:
-        train_unsupervised = MEDTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
-        test_unsupervised = MEDTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
+        train_unsupervised = MEDTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
+        test_unsupervised = MEDTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
 else:
     if args.data == 'embl_mito':
         train = EMBLMitoTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
@@ -112,8 +115,8 @@ else:
         train = EMBLERTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
         test = EMBLERTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
     if args.pretrain_unsupervised:
-        train_unsupervised = EMBLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
-        test_unsupervised = EMBLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform)
+        train_unsupervised = EMBLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
+        test_unsupervised = EMBLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.test_batch_size)
 train_loader_unsupervised = None
@@ -123,24 +126,43 @@ if args.pretrain_unsupervised:
     test_loader_unsupervised = DataLoader(test_unsupervised, batch_size=args.test_batch_size)
 
 """
-    Setup optimization for finetuning
+    Setup optimization for unsupervised training if necessary
 """
-print('[%s] Setting up optimization for finetuning' % (datetime.datetime.now()))
-# load best checkpoint
-if args.method == "2D":
-    net = UNet2D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1), pretrain_unsupervised=(args.pretrain_unsupervised==1))
-else:
-    net = UNet3D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1), pretrain_unsupervised=(args.pretrain_unsupervised==1))
+if args.pretrain_unsupervised==1:
+    print('[%s] Setting up optimization for unsupervised training if necessary' % (datetime.datetime.now()))
+    if args.method == "2D":
+        net_us = UNet2D(out_channels=1, feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm == 1), pretrain_unsupervised=(args.pretrain_unsupervised == 1))
+    else:
+        net_us = UNet3D(out_channels=1, feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1), pretrain_unsupervised=(args.pretrain_unsupervised==1))
+
+    """
+        Train the network unsupervised
+    """
+    print('[%s] Training network unsupervised' % (datetime.datetime.now()))
+    net_us.train_net(train_loader=train_loader_unsupervised, test_loader=test_loader_unsupervised,
+                  loss_fn=loss_fn_rec, lr=args.lr, step_size=args.step_size, gamma=args.gamma,
+                  epochs=args.epochs, test_freq=args.test_freq, print_stats=args.print_stats,
+                  log_dir=args.log_dir)
 
 """
-    Train the network
+    Setup optimization for supervised training
 """
-print('[%s] Training network' % (datetime.datetime.now()))
+print('[%s] Setting up optimization for supervised training' % (datetime.datetime.now()))
+if args.method == "2D":
+    net = UNet2D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm == 1))
+else:
+    net = UNet3D(feature_maps=args.fm, levels=args.levels, group_norm=(args.group_norm==1))
+if args.pretrain_unsupervised==1:
+    net.encoder = deepcopy(net_us.encoder)
+
+"""
+    Train the network supervised
+"""
+print('[%s] Training network supervised' % (datetime.datetime.now()))
 net.train_net(train_loader=train_loader, test_loader=test_loader,
-              loss_fn_seg=loss_fn_seg, lr=args.lr, step_size=args.step_size, gamma=args.gamma,
+              loss_fn=loss_fn_seg, lr=args.lr, step_size=args.step_size, gamma=args.gamma,
               epochs=args.epochs, test_freq=args.test_freq, print_stats=args.print_stats,
-              log_dir=args.log_dir, loss_fn_rec=loss_fn_rec,
-              train_loader_unsupervised=train_loader_unsupervised, test_loader_unsupervised=test_loader_unsupervised)
+              log_dir=args.log_dir)
 
 """
     Validate the trained network
