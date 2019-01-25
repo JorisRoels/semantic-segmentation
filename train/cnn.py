@@ -42,6 +42,7 @@ parser.add_argument("--augment_noise", help="Use noise augmentation", type=int, 
 parser.add_argument("--class_weight", help="Percentage of the reference class", type=float, default=(0.5))
 
 # optimization parameters
+parser.add_argument("--preprocess", help="Type of preprocessing", type=str, default="z") # z or unit
 parser.add_argument("--pretrain_unsupervised", help="Flag whether to pre-train unsupervised", type=int, default=0)
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)
 parser.add_argument("--step_size", help="Number of epochs after which the learning rate should decay", type=int, default=10)
@@ -78,30 +79,30 @@ print('[%s] Loading data' % (datetime.datetime.now()))
 train_xtransform_us, train_ytransform_us, test_xtransform_us, test_ytransform_us = get_augmenters_2d(augment_noise=(args.augment_noise==1))
 train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_2d(augment_noise=(args.augment_noise==1))
 if args.data == 'epfl':
-    train = EPFLPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-    test = EPFLPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    train = EPFLPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
+    test = EPFLPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
     if args.pretrain_unsupervised:
         train_unsupervised = EPFLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
         test_unsupervised = EPFLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
 elif args.data == 'vnc':
-    train = VNCPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-    test = VNCPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    train = VNCPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
+    test = VNCPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
     if args.pretrain_unsupervised:
         train_unsupervised = VNCTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
         test_unsupervised = VNCTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
 elif args.data == 'med':
-    train = MEDPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-    test = MEDPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+    train = MEDPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
+    test = MEDPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
     if args.pretrain_unsupervised:
         train_unsupervised = MEDTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
         test_unsupervised = MEDTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
 else:
     if args.data == 'embl_mito':
-        train = EMBLMitoPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-        test = EMBLMitoPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+        train = EMBLMitoPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
+        test = EMBLMitoPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
     else:
-        train = EMBLERPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform)
-        test = EMBLERPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform)
+        train = EMBLERPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
+        test = EMBLERPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
     if args.pretrain_unsupervised:
         train_unsupervised = EMBLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
         test_unsupervised = EMBLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
