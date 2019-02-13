@@ -12,9 +12,7 @@ import argparse
 import datetime
 import os
 import torch
-import torch.optim as optim
 from torch.utils.data import DataLoader
-from copy import deepcopy
 
 from data.datasets import *
 from networks.cnn import CNN
@@ -22,7 +20,7 @@ from util.io import imwrite3D
 from util.preprocessing import get_augmenters_2d
 from util.validation import segment_pixels
 from util.metrics import jaccard, dice, accuracy_metrics
-from util.losses import CrossEntropyLoss, MSELoss
+from util.losses import CrossEntropyLoss
 
 """
     Parse all the arguments
@@ -33,17 +31,19 @@ parser = argparse.ArgumentParser()
 # logging parameters
 parser.add_argument("--log_dir", help="Logging directory", type=str, default="logs")
 parser.add_argument("--write_dir", help="Writing directory", type=str, default=None)
-parser.add_argument("--data", help="Dataset for training", type=str, default="epfl") # options: 'epfl', 'embl_mito', 'embl_er', vnc, med
-parser.add_argument("--print_stats", help="Number of iterations between each time to log training losses", type=int, default=1)
+parser.add_argument("--data_train", help="Data for training", type=str, default="../../data/epfl/training.tif")
+parser.add_argument("--labels_train", help="Labels for training", type=str, default="../../data/epfl/training_groundtruth.tif")
+parser.add_argument("--data_test", help="Data for testing", type=str, default="../../data/epfl/testing.tif")
+parser.add_argument("--labels_test", help="Labels for testing", type=str, default="../../data/epfl/testing_groundtruth.tif")
+parser.add_argument("--print_stats", help="Number of iterations between each time to log training losses", type=int, default=100)
 
 # network parameters
-parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="96,96")
+parser.add_argument("--input_size", help="Size of the blocks that propagate through the network", type=str, default="95,95")
 parser.add_argument("--augment_noise", help="Use noise augmentation", type=int, default=1)
 parser.add_argument("--class_weight", help="Percentage of the reference class", type=float, default=(0.5))
 
 # optimization parameters
 parser.add_argument("--preprocess", help="Type of preprocessing", type=str, default="z") # z or unit
-parser.add_argument("--pretrain_unsupervised", help="Flag whether to pre-train unsupervised", type=int, default=0)
 parser.add_argument("--lr", help="Learning rate of the optimization", type=float, default=1e-3)
 parser.add_argument("--step_size", help="Number of epochs after which the learning rate should decay", type=int, default=10)
 parser.add_argument("--gamma", help="Learning rate decay factor", type=float, default=0.9)
@@ -56,7 +56,6 @@ args = parser.parse_args()
 args.input_size = [int(item) for item in args.input_size.split(',')]
 weight = torch.FloatTensor([1-args.class_weight, args.class_weight]).cuda()
 loss_fn_seg = CrossEntropyLoss(weight=weight)
-loss_fn_rec = MSELoss()
 
 """
     Setup logging directory
@@ -74,80 +73,28 @@ if args.write_dir is not None:
     Load the data
 """
 input_shape = (1, args.input_size[0], args.input_size[1])
-# load supervised data
 print('[%s] Loading data' % (datetime.datetime.now()))
-train_xtransform_us, train_ytransform_us, test_xtransform_us, test_ytransform_us = get_augmenters_2d(augment_noise=(args.augment_noise==1))
-train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_2d(augment_noise=(args.augment_noise==1))
-if args.data == 'epfl':
-    train = EPFLPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
-    test = EPFLPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
-    if args.pretrain_unsupervised:
-        train_unsupervised = EPFLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
-        test_unsupervised = EPFLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
-elif args.data == 'vnc':
-    train = VNCPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
-    test = VNCPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
-    if args.pretrain_unsupervised:
-        train_unsupervised = VNCTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
-        test_unsupervised = VNCTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
-elif args.data == 'med':
-    train = MEDPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
-    test = MEDPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
-    if args.pretrain_unsupervised:
-        train_unsupervised = MEDTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
-        test_unsupervised = MEDTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
-else:
-    if args.data == 'embl_mito':
-        train = EMBLMitoPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
-        test = EMBLMitoPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
-    else:
-        train = EMBLERPixelTrainDataset(input_shape=input_shape, transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
-        test = EMBLERPixelTestDataset(input_shape=input_shape, transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
-    if args.pretrain_unsupervised:
-        train_unsupervised = EMBLTrainDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
-        test_unsupervised = EMBLTestDatasetUnsupervised(input_shape=input_shape, transform=train_xtransform_us)
+# augmenters
+train_xtransform_us, train_ytransform_us, test_xtransform_us, test_ytransform_us = get_augmenters_2d(augment_noise=(args.augment_noise == 1))
+train_xtransform, train_ytransform, test_xtransform, test_ytransform = get_augmenters_2d(augment_noise=(args.augment_noise == 1))
+# load data
+train = WeaklyLabeledVolumeDataset(args.data_train, args.labels_train, input_shape, mode='image-level', transform=train_xtransform, target_transform=train_ytransform, preprocess=args.preprocess)
+test = WeaklyLabeledVolumeDataset(args.data_test, args.labels_test, input_shape, mode='image-level', transform=test_xtransform, target_transform=test_ytransform, preprocess=args.preprocess)
 train_loader = DataLoader(train, batch_size=args.train_batch_size)
 test_loader = DataLoader(test, batch_size=args.test_batch_size)
-train_loader_unsupervised = None
-test_loader_unsupervised = None
-if args.pretrain_unsupervised:
-    train_loader_unsupervised = DataLoader(train_unsupervised, batch_size=args.train_batch_size)
-    test_loader_unsupervised = DataLoader(test_unsupervised, batch_size=args.test_batch_size)
-
-"""
-    Setup optimization for unsupervised training if necessary
-"""
-if args.pretrain_unsupervised==1:
-    print('[%s] Setting up optimization for unsupervised training if necessary' % (datetime.datetime.now()))
-    net_us = CNN(pretrain_unsupervised=(args.pretrain_unsupervised == 1))
-    optimizer = optim.Adam(net_us.parameters(), lr=args.lr)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
-
-    """
-        Train the network unsupervised
-    """
-    print('[%s] Training network unsupervised' % (datetime.datetime.now()))
-    net_us.train_net(train_loader=train_loader_unsupervised, test_loader=test_loader_unsupervised,
-                  loss_fn=loss_fn_rec, optimizer=optimizer, scheduler=scheduler,
-                  epochs=args.epochs, test_freq=args.test_freq, print_stats=args.print_stats,
-                  log_dir=args.log_dir)
 
 """
     Setup optimization for supervised training
 """
 print('[%s] Setting up optimization for supervised training' % (datetime.datetime.now()))
 net = CNN()
-if args.pretrain_unsupervised==1:
-    net.encoder = deepcopy(net_us.encoder)
-optimizer = optim.Adam(net.parameters(), lr=args.lr)
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
 
 """
     Train the network supervised
 """
 print('[%s] Training network supervised' % (datetime.datetime.now()))
 net.train_net(train_loader=train_loader, test_loader=test_loader,
-              loss_fn=loss_fn_seg, optimizer=optimizer, scheduler=scheduler,
+              loss_fn=loss_fn_seg, lr=args.lr, step_size=args.step_size, gamma=args.gamma,
               epochs=args.epochs, test_freq=args.test_freq, print_stats=args.print_stats,
               log_dir=args.log_dir)
 

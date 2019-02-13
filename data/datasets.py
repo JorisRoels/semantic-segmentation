@@ -1,14 +1,13 @@
 
-import os
 import numpy as np
 import torch.utils.data as data
 from util.preprocessing import normalize
 from util.io import read_tif
-from util.tools import sample_labeled_input, sample_unlabeled_input
+from util.tools import sample_labeled_input
 
-class LabeledVolumeDataset(data.Dataset):
+class StronglyLabeledVolumeDataset(data.Dataset):
 
-    def __init__(self, data_path, label_path, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, dtypes=('uint8','uint8')):
+    def __init__(self, data_path, label_path, input_shape, split=None, train=None, len_epoch=1000, preprocess='z', transform=None, target_transform=None, dtypes=('uint8','uint8')):
 
         self.data_path = data_path
         self.label_path = label_path
@@ -29,6 +28,16 @@ class LabeledVolumeDataset(data.Dataset):
         elif preprocess == 'unit':
             self.data = normalize(self.data, 0, 255)
         self.labels = normalize(self.labels, 0, 255)
+
+        if split is not None:
+            if train:
+                s = int(split * self.data.shape[2])
+                self.data = self.data[:, :, :s]
+                self.labels = self.labels[:, :, :s]
+            else:
+                s = int(split * self.data.shape[2])
+                self.data = self.data[:, :, s:]
+                self.labels = self.labels[:, :, s:]
 
     def __getitem__(self, i):
 
@@ -57,16 +66,20 @@ class LabeledVolumeDataset(data.Dataset):
 
         return mu, std
 
-class UnlabeledVolumeDataset(data.Dataset):
+class WeaklyLabeledVolumeDataset(data.Dataset):
 
-    def __init__(self, data_path, input_shape, len_epoch=1000, preprocess='unit', transform=None, dtype='uint8'):
+    def __init__(self, data_path, label_path, input_shape, mode='image-level', split=None, train=None, len_epoch=1000, preprocess='z', transform=None, target_transform=None, dtypes=('uint8','uint8')):
 
         self.data_path = data_path
+        self.label_path = label_path
         self.input_shape = input_shape
+        self.mode = mode
         self.len_epoch = len_epoch
         self.transform = transform
+        self.target_transform = target_transform
 
-        self.data = read_tif(data_path, dtype=dtype)
+        self.data = read_tif(data_path, dtype=dtypes[0])
+        self.labels = read_tif(label_path, dtype=dtypes[1])
 
         mu, std = self.get_stats()
         self.mu = mu
@@ -76,20 +89,42 @@ class UnlabeledVolumeDataset(data.Dataset):
             self.data = normalize(self.data, mu, std)
         elif preprocess == 'unit':
             self.data = normalize(self.data, 0, 255)
+        self.labels = normalize(self.labels, 0, 255)
+
+        if split is not None:
+            if train:
+                s = int(split * self.data.shape[2])
+                self.data = self.data[:, :, :s]
+                self.labels = self.labels[:, :, :s]
+            else:
+                s = int(split * self.data.shape[2])
+                self.data = self.data[:, :, s:]
+                self.labels = self.labels[:, :, s:]
 
     def __getitem__(self, i):
 
         # get random sample
-        input = sample_unlabeled_input(self.data, self.input_shape)
+        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
 
         # perform augmentation if necessary
         if self.transform is not None:
             input = self.transform(input)
 
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...]
-        else:
-            return input
+        if self.target_transform is not None and len(target)>0:
+            target = self.target_transform(target)
+
+        if self.mode == 'image-level':
+            target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
+            if self.input_shape[0] > 1: # 3D data
+                return input[np.newaxis, ...], target
+            else:
+                return input, target
+        else: # image-level labels as default weak labels
+            target = target[target.shape[0] // 2, target.shape[1] // 2, target.shape[2] // 2]
+            if self.input_shape[0] > 1:  # 3D data
+                return input[np.newaxis, ...], target
+            else:
+                return input, target
 
     def __len__(self):
 
@@ -101,547 +136,3 @@ class UnlabeledVolumeDataset(data.Dataset):
         std = np.std(self.data)
 
         return mu, std
-
-class EPFLTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None):
-        super(EPFLTrainDataset, self).__init__(os.path.join('../data', 'epfl', 'training.tif'),
-                                               os.path.join('../data', 'epfl', 'training_groundtruth.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                               preprocess=preprocess,
-                                               transform=transform,
-                                               target_transform=target_transform)
-
-class EPFLTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None):
-        super(EPFLTestDataset, self).__init__(os.path.join('../data', 'epfl', 'testing.tif'),
-                                              os.path.join('../data', 'epfl', 'testing_groundtruth.tif'),
-                                              input_shape,
-                                              len_epoch=len_epoch,
-                                              preprocess=preprocess,
-                                              transform=transform,
-                                              target_transform=target_transform)
-
-class EPFLTrainDatasetUnsupervised(UnlabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None):
-        super(EPFLTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'epfl', 'volumedata_train.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                               preprocess=preprocess,
-                                               transform=transform)
-
-class EPFLTestDatasetUnsupervised(UnlabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None):
-        super(EPFLTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'epfl', 'volumedata_test.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                               preprocess=preprocess,
-                                               transform=transform)
-
-class EPFLPixelTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None):
-        super(EPFLPixelTrainDataset, self).__init__(os.path.join('../data', 'epfl', 'training.tif'),
-                                               os.path.join('../data', 'epfl', 'training_groundtruth.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                                    preprocess=preprocess,
-                                               transform=transform,
-                                               target_transform=target_transform)
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class EPFLPixelTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None):
-        super(EPFLPixelTestDataset, self).__init__(os.path.join('../data', 'epfl', 'testing.tif'),
-                                                    os.path.join('../data', 'epfl', 'testing_groundtruth.tif'),
-                                                    input_shape,
-                                                    len_epoch=len_epoch,
-                                                   preprocess=preprocess,
-                                                    transform=transform,
-                                                    target_transform=target_transform)
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class EMBLMitoTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(EMBLMitoTrainDataset, self).__init__(os.path.join('../data', 'embl', 'data.tif'),
-                                                   os.path.join('../data', 'embl', 'mito_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                                   preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, :s]
-        self.labels = self.labels[:, :, :s]
-
-class EMBLMitoTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(EMBLMitoTestDataset, self).__init__(os.path.join('../data', 'embl', 'data.tif'),
-                                                   os.path.join('../data', 'embl', 'mito_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                                  preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, s:]
-        self.labels = self.labels[:, :, s:]
-
-class EMBLERTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(EMBLERTrainDataset, self).__init__(os.path.join('../data', 'embl', 'data.tif'),
-                                                   os.path.join('../data', 'embl', 'er_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                                 preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, :s]
-        self.labels = self.labels[:, :, :s]
-
-class EMBLERTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(EMBLERTestDataset, self).__init__(os.path.join('../data', 'embl', 'data.tif'),
-                                                  os.path.join('../data', 'embl', 'er_labels.tif'),
-                                                  input_shape,
-                                                  len_epoch=len_epoch,
-                                                preprocess=preprocess,
-                                                  transform=transform,
-                                                  target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, s:]
-        self.labels = self.labels[:, :, s:]
-
-class EMBLMitoPixelTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(EMBLMitoPixelTrainDataset, self).__init__(os.path.join('../data', 'embl', 'data.tif'),
-                                                   os.path.join('../data', 'embl', 'mito_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                                        preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, :s]
-        self.labels = self.labels[:, :, :s]
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class EMBLMitoPixelTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(EMBLMitoPixelTestDataset, self).__init__(os.path.join('../data', 'embl', 'data.tif'),
-                                                   os.path.join('../data', 'embl', 'mito_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                                       preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, s:]
-        self.labels = self.labels[:, :, s:]
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class EMBLERPixelTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(EMBLERPixelTrainDataset, self).__init__(os.path.join('../data', 'embl', 'data.tif'),
-                                                   os.path.join('../data', 'embl', 'er_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                                      preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, :s]
-        self.labels = self.labels[:, :, :s]
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class EMBLERPixelTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(EMBLERPixelTestDataset, self).__init__(os.path.join('../data', 'embl', 'data.tif'),
-                                                  os.path.join('../data', 'embl', 'er_labels.tif'),
-                                                  input_shape,
-                                                  len_epoch=len_epoch,
-                                                     preprocess=preprocess,
-                                                  transform=transform,
-                                                  target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, s:]
-        self.labels = self.labels[:, :, s:]
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class EMBLTrainDatasetUnsupervised(UnlabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
-        super(EMBLTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'embl', 'data_larger.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                               preprocess=preprocess,
-                                               transform=transform)
-
-        s = int(split * self.data.shape[0])
-        self.data = self.data[:s, :, :]
-
-class EMBLTestDatasetUnsupervised(UnlabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
-        super(EMBLTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'embl', 'data_larger.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                               preprocess=preprocess,
-                                               transform=transform)
-
-        s = int(split * self.data.shape[0])
-        self.data = self.data[s:, :, :]
-
-class VNCTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(VNCTrainDataset, self).__init__(os.path.join('../data', 'vnc', 'data.tif'),
-                                                   os.path.join('../data', 'vnc', 'mito_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                              preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, :s]
-        self.labels = self.labels[:, :, :s]
-
-class VNCTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(VNCTestDataset, self).__init__(os.path.join('../data', 'vnc', 'data.tif'),
-                                                   os.path.join('../data', 'vnc', 'mito_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                             preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, s:]
-        self.labels = self.labels[:, :, s:]
-
-class VNCPixelTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(VNCPixelTrainDataset, self).__init__(os.path.join('../data', 'vnc', 'data.tif'),
-                                                   os.path.join('../data', 'vnc', 'mito_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                                   preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, :s]
-        self.labels = self.labels[:, :, :s]
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class VNCPixelTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(VNCPixelTestDataset, self).__init__(os.path.join('../data', 'vnc', 'data.tif'),
-                                                   os.path.join('../data', 'vnc', 'mito_labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                                  preprocess=preprocess,
-                                                  transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, s:]
-        self.labels = self.labels[:, :, s:]
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class VNCTrainDatasetUnsupervised(UnlabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
-        super(VNCTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'vnc', 'data_larger.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                               preprocess=preprocess,
-                                               transform=transform)
-
-        s = int(split * self.data.shape[0])
-        self.data = self.data[:s, :, :]
-
-class VNCTestDatasetUnsupervised(UnlabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
-        super(VNCTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'vnc', 'data_larger.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                               preprocess=preprocess,
-                                               transform=transform)
-
-        s = int(split * self.data.shape[0])
-        self.data = self.data[s:, :, :]
-
-class MEDTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(MEDTrainDataset, self).__init__(os.path.join('../data', 'med', 'data.tif'),
-                                              os.path.join('../data', 'med', 'labels.tif'),
-                                              input_shape,
-                                              len_epoch=len_epoch,
-                                              preprocess=preprocess,
-                                              transform=transform,
-                                              target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, :s]
-        self.labels = self.labels[:, :, :s]
-
-class MEDTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(MEDTestDataset, self).__init__(os.path.join('../data', 'med', 'data.tif'),
-                                             os.path.join('../data', 'med', 'labels.tif'),
-                                             input_shape,
-                                             len_epoch=len_epoch,
-                                             preprocess=preprocess,
-                                             transform=transform,
-                                             target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, s:]
-        self.labels = self.labels[:, :, s:]
-
-class MEDPixelTrainDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(MEDPixelTrainDataset, self).__init__(os.path.join('../data', 'med', 'data.tif'),
-                                                   os.path.join('../data', 'med', 'labels.tif'),
-                                                   input_shape,
-                                                   len_epoch=len_epoch,
-                                                   preprocess=preprocess,
-                                                   transform=transform,
-                                                   target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, :s]
-        self.labels = self.labels[:, :, :s]
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class MEDPixelTestDataset(LabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='z', transform=None, target_transform=None, split=0.5):
-        super(MEDPixelTestDataset, self).__init__(os.path.join('../data', 'med', 'data.tif'),
-                                                  os.path.join('../data', 'med', 'labels.tif'),
-                                                  input_shape,
-                                                  len_epoch=len_epoch,
-                                                  preprocess=preprocess,
-                                                  transform=transform,
-                                                  target_transform=target_transform)
-
-        s = int(split * self.data.shape[2])
-        self.data = self.data[:, :, s:]
-        self.labels = self.labels[:, :, s:]
-
-    def __getitem__(self, i):
-
-        # get random sample
-        input, target = sample_labeled_input(self.data, self.labels, self.input_shape)
-
-        # perform augmentation if necessary
-        if self.transform is not None:
-            input = self.transform(input)
-
-        if self.target_transform is not None and len(target)>0:
-            target = self.target_transform(target)
-        target = target[target.shape[0]//2, target.shape[1]//2, target.shape[2]//2]
-        if self.input_shape[0] > 1: # 3D data
-            return input[np.newaxis, ...], target
-        else:
-            return input, target
-
-class MEDTrainDatasetUnsupervised(UnlabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
-        super(MEDTrainDatasetUnsupervised, self).__init__(os.path.join('../data', 'med', 'data.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                               preprocess=preprocess,
-                                               transform=transform)
-
-        s = int(split * self.data.shape[0])
-        self.data = self.data[:s, :, :]
-
-class MEDTestDatasetUnsupervised(UnlabeledVolumeDataset):
-
-    def __init__(self, input_shape, len_epoch=1000, preprocess='unit', transform=None, split=0.5):
-        super(MEDTestDatasetUnsupervised, self).__init__(os.path.join('../data', 'med', 'data.tif'),
-                                               input_shape,
-                                               len_epoch=len_epoch,
-                                               preprocess=preprocess,
-                                               transform=transform)
-
-        s = int(split * self.data.shape[0])
-        self.data = self.data[s:, :, :]

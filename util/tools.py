@@ -23,22 +23,6 @@ def sample_labeled_input(data, labels, input_shape):
 
     return input, target
 
-# generate an input and target sample of certain shape from a labeled dataset
-def sample_unlabeled_input(data, input_shape):
-
-    # randomize seed
-    np.random.seed()
-
-    # generate random position
-    x = np.random.randint(0, data.shape[0]-input_shape[0]+1)
-    y = np.random.randint(0, data.shape[1]-input_shape[1]+1)
-    z = np.random.randint(0, data.shape[2]-input_shape[2]+1)
-
-    # extract input and target patch
-    input = data[x:x+input_shape[0], y:y+input_shape[1], z:z+input_shape[2]]
-
-    return input
-
 # returns a 3D Gaussian window that can be used for window weighting and merging
 def gaussian_window(size, sigma=1):
 

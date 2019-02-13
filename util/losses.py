@@ -4,15 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from distutils.version import LooseVersion
 
-class MSELoss(nn.Module):
-
-    def forward(self, input, target):
-
-        target_rec = torch.sigmoid(input)
-        loss = torch.mean((target-target_rec)**2)
-
-        return loss
-
 class CrossEntropyLoss(nn.Module):
 
     def __init__(self, weight=None, size_average=False):
@@ -56,17 +47,3 @@ class CrossEntropyLoss(nn.Module):
         if self.size_average:
             loss /= mask.data.sum()
         return loss
-
-class JaccardLoss(nn.Module):
-
-    def forward(self, input, target):
-
-        eps = 1e-10
-
-        predicted_probabilities = F.softmax(input, dim=1)[:, 1:2, ...]
-        target = target.float()
-
-        intersection = (predicted_probabilities * target).sum()
-        union = predicted_probabilities.sum() + target.sum() - intersection
-
-        return - (intersection+eps) / (union+eps)

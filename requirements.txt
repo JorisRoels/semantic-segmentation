@@ -1,0 +1,8 @@
+numpy
+pydensecrf
+tifffile
+scipy
+progressbar2
+scikit-image
+imgaug
+tensorboardX
