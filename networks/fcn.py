@@ -177,7 +177,7 @@ class FCN2D8(nn.Module):
             # print statistics if necessary
             if i % print_stats == 0:
                 print('[%s] Epoch %5d - Iteration %5d/%5d - Loss: %.6f'
-                      % (datetime.datetime.now(), epoch, i, len(loader.dataset), loss))
+                      % (datetime.datetime.now(), epoch, i, len(loader.dataset)/loader.batch_size, loss))
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -479,7 +479,7 @@ class FCN2D16(nn.Module):
             # print statistics if necessary
             if i % print_stats == 0:
                 print('[%s] Epoch %5d - Iteration %5d/%5d - Loss: %.6f'
-                      % (datetime.datetime.now(), epoch, i, len(loader.dataset), loss))
+                      % (datetime.datetime.now(), epoch, i, len(loader.dataset)/loader.batch_size, loss))
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -768,7 +768,7 @@ class FCN2D32(nn.Module):
             # print statistics if necessary
             if i % print_stats == 0:
                 print('[%s] Epoch %5d - Iteration %5d/%5d - Loss: %.6f'
-                      % (datetime.datetime.now(), epoch, i, len(loader.dataset), loss))
+                      % (datetime.datetime.now(), epoch, i, len(loader.dataset)/loader.batch_size, loss))
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt

@@ -197,7 +197,7 @@ class UNetDecoder3D(nn.Module):
 # original 2D unet model
 class UNet2D(nn.Module):
 
-    def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, group_norm=True, skip_connections=True):
+    def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, group_norm=False, skip_connections=True):
         super(UNet2D, self).__init__()
 
         self.in_channels = in_channels
@@ -258,7 +258,7 @@ class UNet2D(nn.Module):
             # print statistics if necessary
             if i % print_stats == 0:
                 print('[%s] Epoch %5d - Iteration %5d/%5d - Loss: %.6f'
-                      % (datetime.datetime.now(), epoch, i, len(loader.dataset), loss))
+                      % (datetime.datetime.now(), epoch, i, len(loader.dataset)/loader.batch_size, loss))
 
         # don't forget to compute the average and print it
         loss_avg = loss_cum / cnt
@@ -394,7 +394,7 @@ class UNet2D(nn.Module):
 # original 3D unet model
 class UNet3D(nn.Module):
 
-    def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, group_norm=True, skip_connections=True):
+    def __init__(self, in_channels=1, out_channels=2, feature_maps=64, levels=4, group_norm=False, skip_connections=True):
         super(UNet3D, self).__init__()
 
         self.in_channels = in_channels
