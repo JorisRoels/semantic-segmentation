@@ -6,6 +6,7 @@ This code provides a PyTorch implementation for various semantic segmentation al
 - DeepLab: Chen, L. C., Papandreou, G., Kokkinos, I., Murphy, K., & Yuille, A. L. (2018). DeepLab: Semantic Image Segmentation with Deep Convolutional Nets, Atrous Convolution, and Fully Connected CRFs. IEEE Transactions on Pattern Analysis and Machine Intelligence. https://doi.org/10.1109/TPAMI.2017.2699184
 - 2D U-Net: Ronneberger, O., Fischer, P., & Brox, T. (2015). U-net: Convolutional networks for biomedical image segmentation. Lecture Notes in Computer Science (Including Subseries Lecture Notes in Artificial Intelligence and Lecture Notes in Bioinformatics), 9351, 234–241. https://doi.org/10.1007/978-3-319-24574-4_28
 - 3D U-Net: Çiçek, Ö., Abdulkadir, A., Lienkamp, S. S., Brox, T., & Ronneberger, O. (2016). 3D U-net: Learning dense volumetric segmentation from sparse annotation. In Lecture Notes in Computer Science (including subseries Lecture Notes in Artificial Intelligence and Lecture Notes in Bioinformatics) (Vol. 9901 LNCS, pp. 424–432). https://doi.org/10.1007/978-3-319-46723-8_49
+
 We additionally provide CRF post-processing. 
 
 We acknowledge the code of [FCN](https://github.com/wkentaro/pytorch-fcn), [DeepLab](https://github.com/kazuto1011/deeplab-pytorch) and [CRF](https://github.com/kmkurn/pytorch-crf), which was used in this work. 
