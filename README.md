@@ -29,4 +29,4 @@ We acknowledge the code of [FCN](https://github.com/wkentaro/pytorch-fcn), [Deep
   - [EPFL mitochondria dataset](https://cvlab.epfl.ch/data/data-em/)
 
 ## Usage
-We provide a [notebook](train/unet.ipynb) that illustrates data loading, network training and validation. Note that the data path might be different, depending on where you downloaded the EPFL data. 
+We provide a [notebook](unet.ipynb) that illustrates data loading, network training and validation. Note that the data path might be different, depending on where you downloaded the EPFL data. 
